@@ -246,7 +246,7 @@ function App() {
         </article>)}
       </section>
     </>}
-    <footer>需要纳入 Git 改动验收？使用 <code>arksentry scan --changed</code> 或 <code>arksentry handoff --changed</code>。</footer>
+    <footer>已在使用 Git？仅验收本次改动，并生成可交给 AI 的修复任务包。 <a href="https://github.com/AnyRyoma/arksentry/tree/main/apps/arksentry-cli" target="_blank" rel="noreferrer">了解 CLI 工作流 →</a></footer>
   </main>;
 }
 
