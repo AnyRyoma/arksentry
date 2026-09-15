@@ -12,6 +12,7 @@ import './styles.css';
 const IGNORED_SEGMENTS = new Set(['node_modules', 'oh_modules', 'build', '.preview']);
 const MAX_FILE_SIZE = 1024 * 1024;
 const MAX_FILES = 500;
+const ANALYSIS_BATCH_SIZE = 4;
 
 type LocalFileHandle = { kind: 'file'; name: string; getFile(): Promise<File> };
 type LocalDirectoryHandle = { kind: 'directory'; name: string; values(): AsyncIterableIterator<LocalFileHandle | LocalDirectoryHandle> };
@@ -87,9 +88,31 @@ async function readHandle(handle: LocalDirectoryHandle, prefix = ''): Promise<So
   return inputs;
 }
 
+function yieldToBrowser(): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, 0));
+}
+
+function mergeReports(reports: AnalysisReport[]): AnalysisReport {
+  const merged: AnalysisReport = {
+    files: [],
+    scannedFiles: 0,
+    unanalyzedFiles: 0,
+    blockerCount: 0,
+    warningCount: 0,
+    generatedAt: new Date().toISOString()
+  };
+  for (const report of reports) {
+    merged.files.push(...report.files);
+    merged.scannedFiles += report.scannedFiles;
+    merged.unanalyzedFiles += report.unanalyzedFiles;
+    merged.blockerCount += report.blockerCount;
+    merged.warningCount += report.warningCount;
+  }
+  return merged;
+}
+
 function App() {
   const pickerRef = useRef<HTMLInputElement>(null);
-  const [inputs, setInputs] = useState<SourceFileInput[]>([]);
   const [report, setReport] = useState<AnalysisReport | null>(null);
   const [message, setMessage] = useState('选择本地项目目录，或先体验内置示例。');
   const [busy, setBusy] = useState(false);
@@ -98,10 +121,29 @@ function App() {
   useEffect(() => {
     pickerRef.current?.setAttribute('webkitdirectory', '');
   }, []);
-  const run = (nextInputs: SourceFileInput[]): void => {
-    setInputs(nextInputs);
-    setReport(analyzeFiles(nextInputs));
-    setMessage(nextInputs.length === 0 ? '没有找到可扫描的 .ets 文件。' : `已在本地扫描 ${nextInputs.length} 个文件。`);
+
+  const run = async (nextInputs: SourceFileInput[]): Promise<void> => {
+    setBusy(true);
+    setReport(null);
+    try {
+      if (nextInputs.length === 0) {
+        setMessage('没有找到可扫描的 .ets 文件。');
+        return;
+      }
+      const partialReports: AnalysisReport[] = [];
+      for (let index = 0; index < nextInputs.length; index += ANALYSIS_BATCH_SIZE) {
+        const end = Math.min(index + ANALYSIS_BATCH_SIZE, nextInputs.length);
+        setMessage(`正在本地分析 ${end} / ${nextInputs.length} 个文件（源码未上传）…`);
+        await yieldToBrowser();
+        partialReports.push(analyzeFiles(nextInputs.slice(index, end)));
+      }
+      setReport(mergeReports(partialReports));
+      setMessage(`已在本地扫描 ${nextInputs.length} 个文件；页面仅保留报告，不保留完整源码副本。`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '本地分析失败。');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const chooseDirectory = async (): Promise<void> => {
@@ -110,10 +152,11 @@ function App() {
       pickerRef.current?.click();
       return;
     }
-    setBusy(true);
     try {
       const directory = await picker();
-      run(await readHandle(directory, directory.name));
+      setBusy(true);
+      setMessage('正在本机读取所选目录，仅筛选 .ets 文件…');
+      await run(await readHandle(directory, directory.name));
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
       setMessage(error instanceof Error ? error.message : '读取目录失败。');
@@ -124,8 +167,9 @@ function App() {
 
   const onFallbackPick = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
     setBusy(true);
+    setMessage('正在本机读取所选目录，仅筛选 .ets 文件…');
     try {
-      run(await readFiles(Array.from(event.target.files ?? [])));
+      await run(await readFiles(Array.from(event.target.files ?? [])));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '读取目录失败。');
     } finally {
@@ -148,19 +192,31 @@ function App() {
       <p className="eyebrow">LOCAL-ONLY · ARKTS · AI CODING</p>
       <h1>ArkSentry</h1>
       <p className="subtitle">把 AI 改动后的 ArkTS 项目，变成一份可验证、可交接的验收报告。</p>
-      <p className="privacy">源码仅在当前浏览器处理，不上传、不保存、不调用模型。</p>
     </header>
 
-    <section className="actions" aria-label="项目扫描操作">
-      <button className="primary" onClick={chooseDirectory} disabled={busy}>{busy ? '正在读取本地文件…' : '选择本地项目目录'}</button>
-      <input ref={pickerRef} className="visually-hidden" type="file" multiple onChange={onFallbackPick} />
-      <span>或体验：</span>
-      <button onClick={() => run(demos['ai-mistakes'])}>AI 常见踩坑</button>
-      <button onClick={() => run(demos['state-mix'])}>V1/V2 混用</button>
-      <button onClick={() => run(demos.clean)}>通过样例</button>
+    <section className="privacy-card" role="note" aria-label="源码隐私保护说明">
+      <div className="privacy-badge" aria-hidden="true">✓</div>
+      <div>
+        <strong>源码不会离开你的设备</strong>
+        <p>扫描完全在当前浏览器内完成。ArkSentry 不上传、不保存源码，也不调用任何模型或第三方分析服务。</p>
+        <ul className="privacy-points">
+          <li>仅读取你主动选择的目录</li>
+          <li>只处理 .ets 文件</li>
+          <li>刷新页面即清空本次报告</li>
+        </ul>
+      </div>
     </section>
 
-    <p className="status" role="status">{message}</p>
+    <section className="actions" aria-label="项目扫描操作">
+      <button className="primary" onClick={chooseDirectory} disabled={busy}>{busy ? '正在本机处理…' : '选择本地项目（仅本机读取）'}</button>
+      <input ref={pickerRef} className="visually-hidden" type="file" multiple onChange={onFallbackPick} />
+      <span>或体验：</span>
+      <button disabled={busy} onClick={() => void run(demos['ai-mistakes'])}>AI 常见踩坑</button>
+      <button disabled={busy} onClick={() => void run(demos['state-mix'])}>V1/V2 混用</button>
+      <button disabled={busy} onClick={() => void run(demos.clean)}>通过样例</button>
+    </section>
+
+    <p className="status" role="status" aria-live="polite">{message}</p>
 
     {report && <>
       <section className="summary" aria-label="验收概览">
@@ -170,6 +226,7 @@ function App() {
         <article><strong>{report.unanalyzedFiles}</strong><span>无法完整分析</span></article>
       </section>
       <section className="notice">这是本地规则验收结果，不等同于编译通过、运行通过或官方认证。</section>
+      <section className="privacy-reminder">隐私提示：报告只保留规则命中与必要代码片段；完整源码不会写入浏览器存储，刷新页面后本次结果即清空。</section>
       <section className="report-actions">
         <button onClick={() => copy(createHandoff(report), '已复制 AI 修复任务包。')}>生成并复制 AI 修复任务包</button>
         <button onClick={() => copy(reportMarkdown, '已复制 Markdown 验收报告。')}>复制 Markdown 报告</button>
