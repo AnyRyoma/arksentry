@@ -167,8 +167,9 @@ export function analyzeFile(input: SourceFileInput): FileAnalysis {
   const source = ts.createSourceFile(input.path, parserContent, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const findings: Finding[] = [];
 
-  if (source.parseDiagnostics.length > 0) {
-    const diagnostic = source.parseDiagnostics[0];
+  const parseDiagnostics = (source as never as { parseDiagnostics: ts.Diagnostic[] }).parseDiagnostics;
+    if (parseDiagnostics.length > 0) {
+    const diagnostic = parseDiagnostics[0];
     const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, ' ');
     return { path: input.path, findings, analysisError: `语法解析失败：${message}` };
   }
