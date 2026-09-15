@@ -11,7 +11,7 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@arksentry/core": "workspace:*",
+    "@arksentry/core": "file:../../packages/arksentry-core",
     "ignore": "^7.0.3"
   },
   "devDependencies": {
