@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@arksentry/core": "workspace:*",
+    "@arksentry/core": "file:../../packages/arksentry-core",
     "@vitejs/plugin-react": "^4.3.4",
     "vite": "^6.0.5",
     "react": "^19.0.0",
