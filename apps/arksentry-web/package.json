@@ -1,6 +1,7 @@
 {
   "name": "@arksentry/web",
   "version": "0.1.0",
+  "description": "Local-only ArkTS project acceptance experience.",
   "private": true,
   "type": "module",
   "scripts": {
