@@ -1,0 +1,20 @@
+{
+  "name": "arksentry",
+  "version": "0.1.0",
+  "description": "Local project and Git-diff ArkTS acceptance for AI-generated code.",
+  "type": "module",
+  "bin": {
+    "arksentry": "./dist/main.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@arksentry/core": "workspace:*",
+    "ignore": "^7.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2"
+  }
+}
