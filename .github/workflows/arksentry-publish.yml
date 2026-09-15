@@ -1,13 +1,9 @@
-name: Publish ArkSentry Web
+name: Manual Cloudflare Pages Publish
 
+# Production deploys automatically through Cloudflare Pages Git integration.
+# Keep this workflow as an explicit fallback so pushes do not build and deploy twice.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/arksentry-web/**'
-      - 'packages/arksentry-core/**'
-      - 'package.json'
 
 permissions:
   contents: read
@@ -17,8 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - run: npm install
